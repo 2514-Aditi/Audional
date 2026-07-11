@@ -5,11 +5,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from typing import Optional
 
-from backend.config import settings
-from backend.utils.logger import logger
-from backend.services.audio import validate_and_convert_audio
-from backend.services.transcription import get_transcription_engine
-from backend.services.assessor import calculate_assessment
+from config import settings
+from utils.logger import logger
+from services.audio import validate_and_convert_audio
+from services.transcription import get_transcription_engine
+from services.assessor import calculate_assessment
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -124,4 +124,4 @@ def assess_pronunciation(
     return JSONResponse(content=response_payload)
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("backend.main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
