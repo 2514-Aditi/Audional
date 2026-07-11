@@ -132,7 +132,7 @@ export default function LandingPage({ onGetStarted, onViewDemo }) {
               Simple 3-Step Process
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-              How PronounceAI structures speech assessment.
+              How Audional structures speech assessment.
             </p>
           </div>
 
