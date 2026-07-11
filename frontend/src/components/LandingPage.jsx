@@ -85,7 +85,7 @@ export default function LandingPage({ onGetStarted, onViewDemo }) {
             </div>
             <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Fast Analysis</h3>
             <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-              Retrieve word alignments and scoring within 3 seconds using our optimized mock-CPU fallback.
+              Retrieve the word alignments and scoring within 3 seconds using our optimized mock-CPU fallback.
             </p>
           </div>
 
