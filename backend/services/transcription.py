@@ -3,8 +3,8 @@ import time
 import random
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional
-from backend.utils.logger import logger
-from backend.config import settings
+from utils.logger import logger
+from config import settings
 
 class BaseTranscriptionEngine(ABC):
     @abstractmethod

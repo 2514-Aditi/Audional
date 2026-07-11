@@ -1,7 +1,7 @@
 import re
 import math
 from typing import Dict, Any, List, Optional
-from backend.utils.logger import logger
+from utils.logger import logger
 
 # A local dictionary of IPA transcriptions and suggestions for common words.
 # This ensures that even without external G2P packages, we render premium, accurate content.

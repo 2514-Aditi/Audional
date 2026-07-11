@@ -2,8 +2,8 @@ import os
 import wave
 import uuid
 from fastapi import HTTPException, UploadFile
-from backend.utils.logger import logger
-from backend.config import settings
+from utils.logger import logger
+from config import settings
 
 def get_audio_duration_wave(file_path: str) -> float:
     """
