@@ -167,46 +167,9 @@ export default function LandingPage({ onGetStarted, onViewDemo }) {
         </div>
       </section>
 
-      {/* TESTIMONIALS SECTION */}
-      <section id="about" className="max-w-5xl mx-auto px-4 scroll-mt-20">
-        <div className="text-center space-y-2 mb-12">
-          <h2 className="text-2xl font-display font-bold text-slate-900 dark:text-slate-100">
-            Trusted by Learners
-          </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Hear from users practicing speaking clarity.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="p-5 rounded-lg border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-800 shadow-sm text-left space-y-3">
-            <p className="text-xs text-slate-600 dark:text-slate-400 italic leading-relaxed">
-              "PronounceAI highlighted mistakes that other programs missed. Being able to click on individual words and hear my own recording next to the target suggestion changed my study workflow entirely."
-            </p>
-            <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              &mdash; Elena K., TOEFL Student
-            </div>
-          </div>
-
-          <div className="p-5 rounded-lg border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-800 shadow-sm text-left space-y-3">
-            <p className="text-xs text-slate-600 dark:text-slate-400 italic leading-relaxed">
-              "The Fluency and Clarity metric progress cards are extremely precise. In less than two weeks, I increased my speech pacing consistency and eliminated common suffix slurs."
-            </p>
-            <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              &mdash; Kenji T., Software Developer
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* FOOTER */}
       <footer className="border-t border-slate-200/80 dark:border-slate-800 pt-8 flex flex-col sm:flex-row items-center justify-between text-[10px] text-slate-400 font-semibold uppercase tracking-wider max-w-5xl mx-auto px-4">
-        <span>&copy; 2026 PronounceAI. All Rights Reserved.</span>
-        <div className="flex space-x-6 mt-4 sm:mt-0">
-          <a href="#" className="hover:text-[#458393] dark:hover:text-[#34A99D] transition-colors">Privacy Policy</a>
-          <a href="#" className="hover:text-[#458393] dark:hover:text-[#34A99D] transition-colors">Terms of Service</a>
-          <a href="https://github.com" target="_blank" rel="noreferrer" className="hover:text-[#458393] dark:hover:text-[#34A99D] transition-colors">GitHub</a>
-        </div>
+        <span>&copy; 2026 Audional. All Rights Reserved.</span>
       </footer>
 
     </div>
