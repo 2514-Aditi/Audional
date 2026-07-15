@@ -11,11 +11,13 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api"
     
     # Engine configuration: 'whisperx' or 'mock'
-    ENGINE_MODE: str = "mock"
+    ENGINE_MODE: str = "faster_whisper"
     
     # Whisper Model settings (used if engine is whisperx or real whisper)
     # Options: tiny, base, small, medium, large-v2
     WHISPER_MODEL: str = "base"
+    MIN_AUDIO_DURATION: float = 1.0
+    MAX_AUDIO_DURATION: float = 45.0
     
     # Hugging Face token (required for some WhisperX alignment models/diarization, though often optional)
     HF_TOKEN: Optional[str] = None

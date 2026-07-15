@@ -97,12 +97,9 @@ def calculate_assessment(words_list: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     if not words_list:
         return {
-            "pronunciation_score": 0,
-            "accuracy_score": 0,
-            "fluency_score": 0,
-            "completeness_score": 0,
-            "mistakes": [],
-            "suggestions": []
+            "pronunciation_score": 0, "accuracy_score": 0, "fluency_score": 0, "completeness_score": 0,
+            "overall_score": 0, "clarity": 0, "fluency": 0, "confidence": 0,
+            "mistakes": [], "suggestions": [], "summary": "No speech detected.", "message": "No speech detected"
         }
 
     # 1. ACCURACY SCORE
@@ -241,11 +238,17 @@ def calculate_assessment(words_list: List[Dict[str, Any]]) -> Dict[str, Any]:
             f"Fluency is {fluency_score}% with occasional stuttering or longer pauses. Focus on vowel articulation."
         )
 
+    # Keep the legacy names consumed by the existing React components, and expose
+    # the presentation aliases used by API consumers. They always contain the same values.
     return {
         "pronunciation_score": overall_score,
         "accuracy_score": accuracy_score,
         "fluency_score": fluency_score,
         "completeness_score": completeness_score,
+        "overall_score": overall_score,
+        "clarity": accuracy_score,
+        "fluency": fluency_score,
+        "confidence": completeness_score,
         "mistakes": mistakes,
         "suggestions": suggestions_summary,
         "summary": summary

@@ -1,121 +1,85 @@
+"""Strict FFmpeg-backed upload validation and audio normalization."""
 import os
-import wave
+import shutil
+import subprocess
 import uuid
-from fastapi import HTTPException, UploadFile
-from utils.logger import logger
-from config import settings
 
-def get_audio_duration_wave(file_path: str) -> float:
-    """
-    Attempts to read audio duration using the standard library wave module.
-    Only works for WAV files.
-    """
+from fastapi import HTTPException, UploadFile
+
+from config import settings
+from utils.logger import logger
+
+ALLOWED_EXTENSIONS = {".wav", ".mp3", ".m4a", ".ogg", ".flac"}
+
+
+def _remove_if_exists(path: str) -> None:
+    if os.path.exists(path):
+        os.remove(path)
+
+
+def _require_ffmpeg() -> tuple[str, str]:
+    ffmpeg, ffprobe = shutil.which("ffmpeg"), shutil.which("ffprobe")
+    if not ffmpeg or not ffprobe:
+        raise HTTPException(status_code=500, detail="FFmpeg is not installed.")
+    return ffmpeg, ffprobe
+
+
+def _duration_seconds(ffprobe: str, path: str) -> float:
+    result = subprocess.run(
+        [ffprobe, "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", path],
+        capture_output=True, text=True, check=False,
+    )
     try:
-        with wave.open(file_path, "rb") as wav_file:
-            frames = wav_file.getnframes()
-            rate = wav_file.getframerate()
-            duration = frames / float(rate)
-            return duration
-    except Exception as e:
-        logger.debug(f"Standard wave reader failed for {file_path}: {e}")
-        raise ValueError("Could not parse WAV file format")
+        return float(result.stdout.strip())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Could not read the uploaded audio file.") from exc
+
 
 def validate_and_convert_audio(upload_file: UploadFile) -> str:
-    """
-    Validates audio file size and duration (must be 30-45 seconds).
-    Saves the file to the upload directory.
-    If running in production mode, enforces WAV conversion and strict duration.
-    If running in mock mode, allows fallback behaviors if ffmpeg is missing.
-    """
-    # Create unique filename
-    file_id = str(uuid.uuid4())
-    file_ext = os.path.splitext(upload_file.filename)[1].lower()
-    
-    # Allowed extensions
-    allowed_exts = [".wav", ".mp3", ".m4a", ".ogg", ".flac"]
-    if file_ext not in allowed_exts:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Unsupported file format. Supported formats: {', '.join(allowed_exts)}"
-        )
-    
-    temp_file_path = os.path.join(settings.UPLOAD_DIR, f"{file_id}_raw{file_ext}")
-    target_wav_path = os.path.join(settings.UPLOAD_DIR, f"{file_id}.wav")
+    """Save an allowed upload and convert it to normalized 16 kHz mono PCM WAV."""
+    extension = os.path.splitext(upload_file.filename or "")[1].lower()
+    if extension not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Unsupported file format. Supported formats: wav, mp3, m4a, ogg, flac")
 
-    # Save uploaded file
+    # No mock fallback: ffprobe validates input and ffmpeg performs every conversion.
+    ffmpeg, ffprobe = _require_ffmpeg()
+    file_id = str(uuid.uuid4())
+    raw_path = os.path.join(settings.UPLOAD_DIR, f"{file_id}_raw{extension}")
+    wav_path = os.path.join(settings.UPLOAD_DIR, f"{file_id}.wav")
     try:
         size = 0
-        with open(temp_file_path, "wb") as f:
-            while content := upload_file.file.read(1024 * 1024):  # Read in chunks of 1MB
-                size += len(content)
+        with open(raw_path, "wb") as destination:
+            while chunk := upload_file.file.read(1024 * 1024):
+                size += len(chunk)
                 if size > settings.MAX_FILE_SIZE:
                     raise HTTPException(status_code=413, detail="File size exceeds the 10MB limit.")
-                f.write(content)
-    except HTTPException:
-        if os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
-        raise
-    except Exception as e:
-        logger.error(f"Failed to save uploaded file: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error while saving file.")
+                destination.write(chunk)
 
-    # Determine duration
-    duration = None
-    
-    # If it is a WAV file, try standard wave module first (doesn't require FFmpeg)
-    if file_ext == ".wav":
-        try:
-            duration = get_audio_duration_wave(temp_file_path)
-            # Since it's already a WAV file, we can copy it directly
-            os.rename(temp_file_path, target_wav_path)
-        except ValueError:
-            pass  # Fall back to other checks
-            
-    # If not processed yet, check if we can use pydub (requires FFmpeg)
-    if duration is None:
-        try:
-            from pydub import AudioSegment
-            audio = AudioSegment.from_file(temp_file_path)
-            duration = len(audio) / 1000.0  # pydub duration is in ms
-            # Export as 16kHz mono WAV for Whisper
-            audio = audio.set_frame_rate(16000).set_channels(1)
-            audio.export(target_wav_path, format="wav")
-            if os.path.exists(temp_file_path):
-                os.remove(temp_file_path)
-        except ImportError:
-            logger.warning("Pydub is not installed. Cannot perform complex audio conversions.")
-        except Exception as e:
-            logger.warning(f"Failed to process audio with pydub: {e}")
+        duration = _duration_seconds(ffprobe, raw_path)
+        if not settings.MIN_AUDIO_DURATION <= duration <= settings.MAX_AUDIO_DURATION:
+            raise HTTPException(status_code=400, detail=(
+                f"Audio duration must be between {settings.MIN_AUDIO_DURATION:g} and "
+                f"{settings.MAX_AUDIO_DURATION:g} seconds. Uploaded file is {duration:.1f} seconds."
+            ))
 
-    # Fallback validation for Mock Mode (if FFmpeg is missing and we couldn't parse duration)
-    if duration is None:
-        if settings.ENGINE_MODE == "mock":
-            # For testing/demo purposes, we allow a fallback duration in mock mode
-            logger.warning("Could not determine actual audio duration. Falling back to default (35s) in mock mode.")
-            duration = 35.0
-            # Just rename the raw file to wav path even if it's not wav, since Mock doesn't process audio bytes
-            if os.path.exists(temp_file_path):
-                os.rename(temp_file_path, target_wav_path)
-        else:
-            # In production/whisperx mode, we must fail if we can't parse or convert the file
-            if os.path.exists(temp_file_path):
-                os.remove(temp_file_path)
-            raise HTTPException(
-                status_code=400,
-                detail="Could not process audio file. Ensure it is a valid WAV file or that FFmpeg is installed."
-            )
-
-    # Validate duration bounds (30 to 45 seconds)
-    if duration < 30.0 or duration > 45.0:
-        # Cleanup
-        if os.path.exists(target_wav_path):
-            os.remove(target_wav_path)
-        if os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
-        raise HTTPException(
-            status_code=400,
-            detail=f"Audio duration must be between 30 and 45 seconds. Uploaded file is {duration:.1f} seconds."
+        # aformat gives Faster-Whisper predictable PCM input; loudnorm avoids extreme levels.
+        conversion = subprocess.run(
+            [ffmpeg, "-y", "-i", raw_path, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-af", "loudnorm", wav_path],
+            capture_output=True, text=True, check=False,
         )
-
-    logger.info(f"Audio validation successful. File: {target_wav_path}, Duration: {duration:.2f}s")
-    return target_wav_path
+        if conversion.returncode != 0 or not os.path.exists(wav_path):
+            logger.error("FFmpeg conversion failed: %s", conversion.stderr[-2000:])
+            raise HTTPException(status_code=400, detail="FFmpeg could not convert the uploaded audio.")
+        logger.info("Audio normalized: %s (%.2fs)", wav_path, duration)
+        return wav_path
+    except HTTPException:
+        _remove_if_exists(raw_path)
+        _remove_if_exists(wav_path)
+        raise
+    except OSError as exc:
+        _remove_if_exists(raw_path)
+        _remove_if_exists(wav_path)
+        logger.exception("Unable to process upload")
+        raise HTTPException(status_code=500, detail="Audio preprocessing failed.") from exc
+    finally:
+        _remove_if_exists(raw_path)

@@ -1,9 +1,11 @@
 import os
+import json
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from typing import Optional
+from contextlib import asynccontextmanager
 
 from config import settings
 from utils.logger import logger
@@ -11,10 +13,16 @@ from services.audio import validate_and_convert_audio
 from services.transcription import get_transcription_engine
 from services.assessor import calculate_assessment
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    get_transcription_engine()
+    yield
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="FastAPI backend for pronunciation assessment using WhisperX and phonetic alignment.",
-    version="1.0.0"
+    description="FastAPI backend for pronunciation assessment using Faster-Whisper.",
+    version="1.1.0",
+    lifespan=lifespan,
 )
 
 # Enable CORS for frontend development
@@ -55,7 +63,7 @@ def health_check():
         "status": "healthy",
         "engine_mode": settings.ENGINE_MODE,
         "whisper_model": settings.WHISPER_MODEL,
-        "cuda_available": settings.ENGINE_MODE == "whisperx"
+        "cuda_available": settings.ENGINE_MODE != "mock"
     }
 
 @app.post("/api/assess")
@@ -66,7 +74,7 @@ def assess_pronunciation(
 ):
     """
     Primary endpoint for pronunciation assessment.
-    - Validates audio file length (30-45s) and format.
+    - Validates audio format and duration.
     - Transcribes and aligns the spoken text.
     - Evaluates accuracy, fluency, and completeness.
     - Returns overall score, word-level metrics, and suggestions.
@@ -88,7 +96,7 @@ def assess_pronunciation(
         engine = get_transcription_engine()
         alignment_data = engine.transcribe_and_align(wav_path, reference_text=reference_text)
     except Exception as e:
-        logger.error(f"Transcription/alignment failed: {e}")
+        logger.exception("Transcription/alignment failed")
         if wav_path and os.path.exists(wav_path):
             os.remove(wav_path)
         raise HTTPException(
@@ -96,11 +104,17 @@ def assess_pronunciation(
             detail="Speech recognition or alignment failed. Please ensure the audio contains clear speech."
         )
 
+    logger.info("Detected transcript: %s", alignment_data.get("transcript", ""))
+    logger.info("Detected words: %d", len(alignment_data.get("words", [])))
+    if not alignment_data.get("words"):
+        raise HTTPException(status_code=400, detail="No speech detected in uploaded audio.")
+
     # 3. Calculate Pronunciation Scores and identify mistakes
     try:
         assessment_results = calculate_assessment(alignment_data["words"])
     except Exception as e:
-        logger.error(f"Assessment calculation failed: {e}")
+        # logger.exception writes the complete traceback to Render/local logs.
+        logger.exception("Assessment calculation failed")
         if wav_path and os.path.exists(wav_path):
             os.remove(wav_path)
         raise HTTPException(status_code=500, detail="Failed to calculate pronunciation metrics.")
@@ -116,6 +130,8 @@ def assess_pronunciation(
         "words": alignment_data["words"],
         **assessment_results
     }
+    # Emit the exact response for operational verification (including timestamps).
+    logger.info("POST /api/assess response: %s", json.dumps(response_payload, ensure_ascii=False))
 
     # Set up background task to clean up after some time (optional, left as placeholder for production)
     # background_tasks.add_task(cleanup_file, wav_path)
