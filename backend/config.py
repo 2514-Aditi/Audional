@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     
     # Whisper Model settings (used if engine is whisperx or real whisper)
     # Options: tiny, base, small, medium, large-v2
-    WHISPER_MODEL: str = "base"
+    WHISPER_MODEL: str = "tiny.en"
     MIN_AUDIO_DURATION: float = 1.0
     MAX_AUDIO_DURATION: float = 45.0
     

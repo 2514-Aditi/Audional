@@ -29,8 +29,7 @@ class FasterWhisperEngine(BaseTranscriptionEngine):
 
     def transcribe_and_align(self, audio_path: str, reference_text: Optional[str] = None) -> Dict[str, Any]:
         segments, info = self.model.transcribe(
-            audio_path, beam_size=1, word_timestamps=True, vad_filter=True,
-            vad_parameters={"min_silence_duration_ms": 350}, condition_on_previous_text=False,
+            audio_path,beam_size=1,best_of=1,word_timestamps=True,vad_filter=True,condition_on_previous_text=False,
         )
         transcript, words, raw_segments = [], [], []
         for segment in segments:  # Materialize the generator so its real output is inspectable.
