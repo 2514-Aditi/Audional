@@ -124,10 +124,16 @@ def assess_pronunciation(
     filename = os.path.basename(wav_path)
     audio_url = f"/api/uploads/{filename}"
 
+    # Alignment keeps diagnostic metadata privately while scoring.  Do not leak
+    # it: callers continue to receive the original word object schema.
+    public_words = [
+        {key: word.get(key) for key in ("word", "start", "end", "score", "_asr_confidence")}
+        for word in alignment_data["words"]
+    ]
     response_payload = {
         "audio_url": audio_url,
         "transcript": alignment_data["transcript"],
-        "words": alignment_data["words"],
+        "words": public_words,
         **assessment_results
     }
     # Emit the exact response for operational verification (including timestamps).

@@ -90,6 +90,50 @@ def get_word_ipa_and_suggestion(word: str) -> tuple[str, str]:
         
     return ipa, suggestion
 
+
+def get_evidence_based_feedback(word: str, assessment: Dict[str, Any]) -> tuple[str, str]:
+    """Describe the observed reading mismatch instead of guessing a phoneme.
+
+    We only make a pronunciation recommendation when a supplied script and the
+    recogniser disagree.  This prevents a low ASR probability from producing a
+    confident-but-generic tip for a word that was actually spoken correctly.
+    """
+    expected = assessment.get("expected") or word
+    heard = assessment.get("heard") or word
+    ipa, fallback_tip = get_word_ipa_and_suggestion(expected)
+    kind = assessment.get("kind")
+    if kind == "near_substitution":
+        return ipa, (
+            f'The recording was heard as "{heard}" rather than the target "{expected}". '
+            f"The word is close, so repeat it slowly and compare the stressed vowel and final consonant."
+        )
+    if kind == "substitution":
+        return ipa, (
+            f'The recording was heard as "{heard}" while the target reading is "{expected}". '
+            f"Practise the target word in isolation, then repeat the full phrase."
+        )
+    if kind == "insertion":
+        return ipa, (
+            f'The recording contains "{heard}", which is not in the supplied reading. '
+            f"Slow down at this point and follow the target wording."
+        )
+    if kind == "timing_yellow":
+        return ipa, (
+            "This word is noticeably stretched compared with the surrounding speech. "
+            "Keep its vowel and final consonant connected to the next word without prolonging it."
+        )
+    if kind == "recognition_yellow":
+        return ipa, (
+            "This word was acoustically less clear than the surrounding words. "
+            "Replay it and repeat it slightly slower, keeping the vowel and final consonant distinct."
+        )
+    if kind == "timing_red":
+        return ipa, (
+            "This word is compressed together with the next word. "
+            "Give it its own clear vowel and consonant before continuing."
+        )
+    return ipa, fallback_tip
+
 def calculate_assessment(words_list: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Calculates detailed pronunciation metrics: Accuracy, Fluency, Completeness, and Overall.
@@ -153,8 +197,13 @@ def calculate_assessment(words_list: List[Dict[str, Any]]) -> Dict[str, Any]:
     # 3. COMPLETENESS SCORE
     # Fraction of words that were successfully aligned and spoke.
     # If a word has score <= 0.2 or start is None, it might have been skipped.
-    aligned_count = sum(1 for w in words_list if w["score"] is not None and w["score"] > 0.25)
-    completeness_score = (aligned_count / total_words) * 100 if total_words > 0 else 0.0
+    reference_total = next((w.get("_reference_total") for w in words_list if "_reference_total" in w), None)
+    reference_matched = next((w.get("_reference_matched") for w in words_list if "_reference_matched" in w), None)
+    if reference_total:
+        completeness_score = (reference_matched / reference_total) * 100
+    else:
+        aligned_count = sum(1 for w in words_list if w["score"] is not None and w["score"] > 0.25)
+        completeness_score = (aligned_count / total_words) * 100 if total_words > 0 else 0.0
     completeness_score = min(max(completeness_score, 0.0), 100.0)
 
     # 4. OVERALL PRONUNCIATION SCORE
@@ -170,8 +219,9 @@ def calculate_assessment(words_list: List[Dict[str, Any]]) -> Dict[str, Any]:
     mistakes = []
     suggestions_summary = []
     
-    # Pronunciation error threshold is 0.70 confidence
-    error_threshold = 0.70
+    # Yellow and red words have alignment evidence. Green words never enter the
+    # mistake list merely because Whisper assigned them a low token probability.
+    error_threshold = 0.80
     
     for idx, w in enumerate(words_list):
         word_text = w["word"]
@@ -182,8 +232,9 @@ def calculate_assessment(words_list: List[Dict[str, Any]]) -> Dict[str, Any]:
         if not clean_word:
             continue
             
-        if score is not None and score < error_threshold:
-            ipa, tip = get_word_ipa_and_suggestion(clean_word)
+        evidence = w.get("_assessment", {})
+        if score is not None and score < error_threshold and evidence.get("kind") != "unscored":
+            ipa, tip = get_evidence_based_feedback(clean_word, evidence)
             
             mistake_item = {
                 "word": word_text,
